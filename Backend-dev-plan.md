@@ -1,0 +1,311 @@
+# 1) Executive Summary
+- This document outlines the backend development plan for the Bridge Co-Parenting Platform. The backend will be a FastAPI application using MongoDB Atlas for the database.
+- Constraints honored: FastAPI, MongoDB Atlas, no Docker, frontend-driven manual testing, `main`-only workflow.
+- The sprint count is dynamic and expands to cover all frontend features.
+
+# 2) In-scope & Success Criteria
+- In-scope:
+  - User account creation, authentication, and management.
+  - Family profile creation and management, including parent and child information.
+  - Shared custody calendar with event creation and change requests.
+  - Secure messaging system with different communication tones.
+  - Expense tracking and management with split calculations.
+  - Document management with secure storage and categorization.
+- Success criteria:
+  - Full coverage of discovered frontend features.
+  - Each sprint passes manual tests via the UI.
+  - Push to `main` after successful testing of each sprint.
+
+# 3) API Design
+- Conventions:
+  - Base path: `/api/v1`
+  - Error model: `{"detail": "Error message"}`
+- Endpoints:
+  - **Auth**
+    - `POST /api/v1/auth/signup`: Create a new user account.
+    - `POST /api/v1/auth/login`: Authenticate a user and return a JWT.
+    - `POST /api/v1/auth/logout`: Invalidate a user's session (server-side logic TBD, could be a blocklist).
+    - `GET /api/v1/auth/me`: Get the current authenticated user's profile.
+  - **Users**
+    - `PUT /api/v1/users/me`: Update the current user's settings.
+  - **Family**
+    - `POST /api/v1/family`: Create a new family profile.
+    - `GET /api/v1/family`: Get the current user's family profile.
+    - `PUT /api/v1/family`: Update the family profile.
+  - **Children**
+    - `POST /api/v1/children`: Add a new child to the family.
+    - `PUT /api/v1/children/{child_id}`: Update a child's information.
+    - `DELETE /api/v1/children/{child_id}`: Remove a child from the family.
+  - **Calendar**
+    - `GET /api/v1/calendar/events`: Get calendar events for a specific month.
+    - `POST /api/v1/calendar/events`: Create a new calendar event.
+    - `POST /api/v1/calendar/change-requests`: Submit a change request for an event.
+    - `PUT /api/v1/calendar/change-requests/{request_id}`: Approve or reject a change request.
+  - **Documents**
+    - `GET /api/v1/documents`: Get a list of all documents.
+    - `POST /api/v1/documents/upload`: Upload a new document.
+    - `DELETE /api/v1/documents/{document_id}`: Delete a document.
+  - **Expenses**
+    - `GET /api/v1/expenses`: Get a list of all expenses.
+    - `POST /api/v1/expenses`: Add a new expense.
+    - `PUT /api/v1/expenses/{expense_id}`: Update an expense (e.g., status).
+  - **Messaging**
+    - `GET /api/v1/conversations`: Get all conversations for the user.
+    - `GET /api/v1/conversations/{conversation_id}`: Get messages for a specific conversation.
+    - `POST /api/v1/conversations/{conversation_id}/messages`: Send a new message.
+
+# 4) Data Model (MongoDB Atlas)
+- **Collections:**
+  - `users`:
+    - `_id`: ObjectId
+    - `firstName`: string, required
+    - `lastName`: string, required
+    - `email`: string, required, unique
+    - `password`: string, required (hashed)
+    - `phone`: string
+    - `timezone`: string
+    - `notifications`: object
+    - `privacy`: object
+    - `profile`: object
+    - `bridgette`: object
+    - `appearance`: object
+    - `preferences`: object
+    - *Example:* `{"firstName": "Sarah", "email": "sarah@example.com", ...}`
+  - `families`:
+    - `_id`: ObjectId
+    - `familyName`: string
+    - `parent1_id`: ObjectId (ref: `users`)
+    - `parent2_id`: ObjectId (ref: `users`)
+    - `children`: array of embedded `child` documents
+    - `custodyArrangement`: string
+    - *Example:* `{"familyName": "Johnson Family", "parent1_id": ObjectId(...), ...}`
+  - `events`:
+    - `_id`: ObjectId
+    - `family_id`: ObjectId (ref: `families`)
+    - `date`: datetime, required
+    - `type`: string, required
+    - `title`: string, required
+    - `parent`: string
+    - `isSwappable`: boolean
+    - *Example:* `{"family_id": ObjectId(...), "date": "2024-01-15T00:00:00Z", "title": "Dad's Weekend", ...}`
+  - `change_requests`:
+    - `_id`: ObjectId
+    - `event_id`: ObjectId (ref: `events`)
+    - `requestedBy_id`: ObjectId (ref: `users`)
+    - `status`: string, required (pending, approved, rejected)
+    - *Example:* `{"event_id": ObjectId(...), "status": "pending", ...}`
+  - `documents`:
+    - `_id`: ObjectId
+    - `family_id`: ObjectId (ref: `families`)
+    - `name`: string, required
+    - `type`: string, required
+    - `fileUrl`: string, required
+    - *Example:* `{"family_id": ObjectId(...), "name": "Custody Agreement.pdf", ...}`
+  - `expenses`:
+    - `_id`: ObjectId
+    - `family_id`: ObjectId (ref: `families`)
+    - `description`: string, required
+    - `amount`: float, required
+    - `paidBy_id`: ObjectId (ref: `users`)
+    - `status`: string, required
+    - *Example:* `{"family_id": ObjectId(...), "description": "Soccer cleats", "amount": 85.99, ...}`
+  - `conversations`:
+    - `_id`: ObjectId
+    - `family_id`: ObjectId (ref: `families`)
+    - `subject`: string, required
+    - `participants`: array of ObjectId (ref: `users`)
+    - `messages`: array of embedded `message` documents
+    - *Example:* `{"family_id": ObjectId(...), "subject": "Saturday Pickup", ...}`
+
+# 5) Frontend Audit & Feature Map
+- **Onboarding & User Management:**
+  - `AccountSetup.tsx`, `FamilyOnboarding.tsx`, `UserSettings.tsx`
+  - Purpose: User registration, family creation, and profile settings.
+  - Backend: `auth`, `users`, `family`, `children` endpoints and models.
+- **Calendar:**
+  - `CalendarView.tsx`
+  - Purpose: Display and manage shared custody calendar, handle change requests.
+  - Backend: `calendar` endpoints and `events`, `change_requests` models.
+- **Documents:**
+  - `DocumentManager.tsx`
+  - Purpose: Upload, view, and manage shared documents.
+  - Backend: `documents` endpoints and `documents` model.
+- **Expenses:**
+  - `ExpenseTracker.tsx`
+  - Purpose: Track shared expenses, manage status and reimbursement.
+  - Backend: `expenses` endpoints and `expenses` model.
+- **Messaging:**
+  - `MessagingInterface.tsx`
+  - Purpose: Secure, logged communication between co-parents.
+  - Backend: `messaging` endpoints and `conversations` model.
+
+# 6) Configuration & ENV Vars (core only)
+- `APP_ENV`: "development"
+- `PORT`: 8000
+- `MONGODB_URI`: (user provided)
+- `JWT_SECRET`: (randomly generated)
+- `JWT_EXPIRES_IN`: 3600
+- `CORS_ORIGINS`: "http://localhost:5173"
+
+# 9) Testing Strategy (Manual via Frontend)
+- Policy: Validate via the UI by navigating screens and submitting forms; optionally observe Network in DevTools.
+- Per-sprint Manual Test Checklist (Frontend): list the exact UI steps and expected outcomes for that sprint.
+- User Test Prompt: short, copy-pasteable instructions guiding a human tester through the UI.
+- Post-sprint: if tests pass, commit and push to GitHub `main`; if not, fix and retest before pushing.
+
+# 10) Dynamic Sprint Plan & Backlog (S0…Sn)
+- **S0 - Environment Setup & Frontend Connection**
+  - Objectives:
+    - Create FastAPI skeleton with `/api/v1` and `/healthz`.
+    - Ask the user for `MONGODB_URI` and set it in the environment.
+    - Implement `/healthz` to include a quick DB connectivity check.
+    - Enable CORS for the frontend origin.
+    - Wire the frontend to the backend.
+    - Initialize Git and set up GitHub.
+  - Definition of Done:
+    - Backend runs locally; `/healthz` responds and shows DB connectivity.
+    - Frontend successfully calls the backend.
+    - Repository exists on GitHub with `main` as default.
+  - Manual Test Checklist (Frontend):
+    - Set `MONGODB_URI`, start backend, open the app, confirm no CORS errors and successful `/healthz` call in Network tab.
+  - User Test Prompt:
+    - "Please provide your MongoDB Atlas connection string. Then, run the backend and frontend, and confirm the app loads without errors."
+  - Post-sprint:
+    - Commit any changes and push to `main`.
+
+- **S1 - Basic Auth (signup, login, logout)**
+  - Objectives:
+    - Implement signup, login, logout.
+    - Protect at least one route in the backend and one page in the frontend.
+  - Endpoints:
+    - `POST /api/v1/auth/signup`
+    - `POST /api/v1/auth/login`
+    - `POST /api/v1/auth/logout`
+    - `GET /api/v1/auth/me`
+  - Tasks:
+    - Create `users` collection and Pydantic model.
+    - Store users with hashed passwords (passlib).
+    - Issue short-lived JWT access tokens.
+  - Definition of Done:
+    - Users can sign up, log in, access a protected page, log out via the frontend.
+  - Manual Test Checklist (Frontend):
+    - Create a user, log in, visit a protected page, log out, verify unauthorized access is blocked.
+  - User Test Prompt:
+    - "Please test the signup and login functionality. Ensure you can access protected content after logging in and are blocked after logging out."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S2 - Family & Child Management**
+  - Objectives:
+    - Implement family and child creation and management.
+  - Endpoints:
+    - `POST /api/v1/family`
+    - `GET /api/v1/family`
+    - `POST /api/v1/children`
+    - `PUT /api/v1/children/{child_id}`
+    - `DELETE /api/v1/children/{child_id}`
+  - Tasks:
+    - Create `families` collection and Pydantic models for Family and Child.
+    - Implement CRUD operations for children.
+  - Definition of Done:
+    - Users can create a family profile and add/edit/remove children through the UI.
+  - Manual Test Checklist (Frontend):
+    - Complete the family onboarding flow, add multiple children, edit their details, and remove one.
+  - User Test Prompt:
+    - "Please test the family onboarding process, including adding, editing, and removing children."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S3 - Calendar & Events**
+  - Objectives:
+    - Implement shared calendar functionality.
+  - Endpoints:
+    - `GET /api/v1/calendar/events`
+    - `POST /api/v1/calendar/events`
+  - Tasks:
+    - Create `events` collection and Pydantic model.
+    - Implement logic to fetch events for a given month.
+  - Definition of Done:
+    - Users can view and add events to the shared calendar.
+  - Manual Test Checklist (Frontend):
+    - Open the calendar view, confirm existing events are displayed, and add a new event.
+  - User Test Prompt:
+    - "Please test the calendar feature. Verify that you can see and add new events."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S4 - Calendar Change Requests**
+  - Objectives:
+    - Implement event change request system.
+  - Endpoints:
+    - `POST /api/v1/calendar/change-requests`
+    - `PUT /api/v1/calendar/change-requests/{request_id}`
+  - Tasks:
+    - Create `change_requests` collection and Pydantic model.
+    - Implement logic for submitting, approving, and rejecting change requests.
+  - Definition of Done:
+    - Users can request changes to events, and the other parent can approve or reject them.
+  - Manual Test Checklist (Frontend):
+    - Request a swap for a custody day, log in as the other parent, and approve the request. Verify the calendar updates.
+  - User Test Prompt:
+    - "Please test the calendar change request feature by requesting a change and then approving it as the other parent."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S5 - Expense Tracking**
+  - Objectives:
+    - Implement expense tracking.
+  - Endpoints:
+    - `GET /api/v1/expenses`
+    - `POST /api/v1/expenses`
+    - `PUT /api/v1/expenses/{expense_id}`
+  - Tasks:
+    - Create `expenses` collection and Pydantic model.
+    - Implement logic for adding and updating expenses.
+  - Definition of Done:
+    - Users can add and view shared expenses.
+  - Manual Test Checklist (Frontend):
+    - Add a new expense, view it in the list, and update its status.
+  - User Test Prompt:
+    - "Please test the expense tracker by adding a new expense and updating its status."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S6 - Document Management**
+  - Objectives:
+    - Implement document uploading and management.
+  - Endpoints:
+    - `GET /api/v1/documents`
+    - `POST /api/v1/documents/upload`
+    - `DELETE /api/v1/documents/{document_id}`
+  - Tasks:
+    - Create `documents` collection and Pydantic model.
+    - Set up file storage (e.g., local storage for now, S3 for production).
+    - Implement file upload and deletion logic.
+  - Definition of Done:
+    - Users can upload, view, and delete documents.
+  - Manual Test Checklist (Frontend):
+    - Upload a document, see it in the document manager, and then delete it.
+  - User Test Prompt:
+    - "Please test the document manager by uploading and deleting a file."
+  - Post-sprint:
+    - Commit the changes and push to `main`.
+
+- **S7 - Messaging**
+  - Objectives:
+    - Implement secure messaging.
+  - Endpoints:
+    - `GET /api/v1/conversations`
+    - `GET /api/v1/conversations/{conversation_id}`
+    - `POST /api/v1/conversations/{conversation_id}/messages`
+  - Tasks:
+    - Create `conversations` collection and Pydantic models for Conversation and Message.
+    - Implement logic for sending and retrieving messages.
+  - Definition of Done:
+    - Users can send and receive messages in real-time.
+  - Manual Test Checklist (Frontend):
+    - Send a message to the other parent and verify it appears in their message list.
+  - User Test Prompt:
+    - "Please test the messaging feature by sending and receiving messages between two users."
+  - Post-sprint:
+    - Commit the changes and push to `main`.

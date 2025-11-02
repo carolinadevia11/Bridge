@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 100% 50%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 240 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 84% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 20%;
+    --sidebar-primary: 0 84% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 20%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 0 84% 50%;
+
+    /* Bridge Custom Colors */
+    --bridge-red: 0 84% 50%;
+    --bridge-yellow: 60 100% 50%;
+    --bridge-blue: 240 100% 50%;
+    --bridge-green: 120 100% 35%;
+    --bridge-black: 0 0% 0%;
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 84% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 100% 45%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 240 100% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 84% 55%;
+
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 0 84% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 0 84% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Bridge Theme Utilities */
+@layer utilities {
+  .bg-bridge-red {
+    background-color: hsl(var(--bridge-red));
+  }
+  .bg-bridge-yellow {
+    background-color: hsl(var(--bridge-yellow));
+  }
+  .bg-bridge-blue {
+    background-color: hsl(var(--bridge-blue));
+  }
+  .bg-bridge-green {
+    background-color: hsl(var(--bridge-green));
+  }
+  .bg-bridge-black {
+    background-color: hsl(var(--bridge-black));
+  }
+  
+  .text-bridge-red {
+    color: hsl(var(--bridge-red));
+  }
+  .text-bridge-yellow {
+    color: hsl(var(--bridge-yellow));
+  }
+  .text-bridge-blue {
+    color: hsl(var(--bridge-blue));
+  }
+  .text-bridge-green {
+    color: hsl(var(--bridge-green));
+  }
+  .text-bridge-black {
+    color: hsl(var(--bridge-black));
+  }
+  
+  .border-bridge-red {
+    border-color: hsl(var(--bridge-red));
+  }
+  .border-bridge-yellow {
+    border-color: hsl(var(--bridge-yellow));
+  }
+  .border-bridge-blue {
+    border-color: hsl(var(--bridge-blue));
+  }
+  .border-bridge-green {
+    border-color: hsl(var(--bridge-green));
+  }
+  .border-bridge-black {
+    border-color: hsl(var(--bridge-black));
+  }
+}
