@@ -15,9 +15,14 @@ import { useToast } from '@/hooks/use-toast';
 
 interface FamilyOnboardingProps {
   onComplete: (familyProfile: FamilyProfile) => void;
+  initialUserData?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
-const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
+const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete, initialUserData }) => {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,11 +30,11 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
   const [bridgetteMessage, setBridgetteMessage] = useState("Hi! I'm so excited to help you set up your family profile! This will help me organize everything perfectly for your unique situation! 🌟");
 
   const [familyData, setFamilyData] = useState<Partial<FamilyProfile>>({
-    familyName: '',
+    familyName: initialUserData ? `${initialUserData.lastName} Family` : '',
     parent1: {
-      firstName: '',
-      lastName: '',
-      email: '',
+      firstName: initialUserData?.firstName || '',
+      lastName: initialUserData?.lastName || '',
+      email: initialUserData?.email || '',
       phone: '',
       address: '',
       city: '',
@@ -73,23 +78,18 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
     },
     {
       id: 'parent1',
-      title: 'Parent 1 Information',
-      description: 'Tell us about the first parent'
-    },
-    {
-      id: 'parent2',
-      title: 'Parent 2 Information',
-      description: 'Tell us about the second parent'
-    },
-    {
-      id: 'geography',
-      title: 'Geographical Information',
-      description: 'Understanding your locations'
+      title: 'Your Information',
+      description: 'Complete your contact details'
     },
     {
       id: 'children',
       title: 'Your Children',
       description: 'Add information about your children'
+    },
+    {
+      id: 'geography',
+      title: 'Location Information',
+      description: 'Tell us about different locations (if applicable)'
     },
     {
       id: 'custody',
@@ -216,93 +216,38 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
     setBridgetteExpression(step === steps.length - 1 ? 'celebrating' : 'encouraging');
   };
 
-  const completeOnboarding = async () => {
-    setIsSubmitting(true);
-    setBridgetteExpression('thinking');
-    setBridgetteMessage("Just a moment while I set everything up for you! 🌟");
+  const completeOnboarding = () => {
+    // Don't create family in backend yet - just pass data to parent component
+    // Family will be created in FamilyCodeSetup component
+    setBridgetteExpression('celebrating');
+    setBridgetteMessage("Perfect! Now let's generate your Family Code! 🎉");
+    
+    const completedProfile: FamilyProfile = {
+      id: Date.now().toString(),
+      familyName: familyData.familyName || `${familyData.parent1?.lastName} Family`,
+      parent1: familyData.parent1!,
+      parent2: familyData.parent2 || {
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        timezone: 'EST'
+      },
+      children: familyData.children || [],
+      geographicalDistance: 0,
+      differentTimezones: false,
+      specialAccommodations: familyData.specialAccommodations,
+      custodyArrangement: familyData.custodyArrangement,
+      custodyNotes: familyData.custodyNotes,
+      onboardingCompleted: false,
+      setupDate: new Date()
+    };
 
-    try {
-      // Step 1: Create a user for Parent 1
-      const parent1Email = familyData.parent1!.email;
-      const tempPassword = "password123"; // In a real app, this should be handled more securely
-
-      try {
-        await authAPI.signup({
-          email: parent1Email,
-          password: tempPassword,
-          firstName: familyData.parent1!.firstName,
-          lastName: familyData.parent1!.lastName
-        });
-      } catch (error) {
-        // Ignore if user already exists, just log in
-        console.info("User might already exist, attempting login.");
-      }
-
-      // Step 2: Log in to get the auth token
-      const loginResponse = await authAPI.login(parent1Email, tempPassword);
-      const token = loginResponse.access_token;
-      localStorage.setItem('authToken', token); // Store the token
-
-      // Step 3: Create family profile with authentication
-      const familyResponse = await familyAPI.createFamily({
-        familyName: familyData.familyName || `${familyData.parent1?.lastName}-${familyData.parent2?.lastName}`,
-        parent1_name: `${familyData.parent1!.firstName} ${familyData.parent1!.lastName}`,
-        parent2_email: familyData.parent2!.email,
-        custodyArrangement: familyData.custodyArrangement,
-      });
-
-      // Add all children
-      const childPromises = (familyData.children || []).map(child =>
-        childrenAPI.addChild({
-          firstName: child.firstName,
-          lastName: child.lastName,
-          dateOfBirth: child.dateOfBirth.toISOString().split('T')[0],
-          gender: child.gender,
-          allergies: child.allergies,
-          notes: child.specialNeeds?.join(', '),
-        })
-      );
-
-      await Promise.all(childPromises);
-
-      // Create completed profile for local state
-      const completedProfile: FamilyProfile = {
-        id: familyResponse.id || Date.now().toString(),
-        familyName: familyData.familyName || `${familyData.parent1?.lastName}-${familyData.parent2?.lastName}`,
-        parent1: familyData.parent1!,
-        parent2: familyData.parent2!,
-        children: familyData.children || [],
-        geographicalDistance: calculateDistance(),
-        differentTimezones: familyData.parent1?.timezone !== familyData.parent2?.timezone,
-        specialAccommodations: familyData.specialAccommodations,
-        custodyArrangement: familyData.custodyArrangement,
-        custodyNotes: familyData.custodyNotes,
-        onboardingCompleted: true,
-        setupDate: new Date()
-      };
-
-      setBridgetteExpression('celebrating');
-      setBridgetteMessage("All set! Your family profile has been created successfully! 🎉");
-      
-      toast({
-        title: "Success!",
-        description: "Your family profile has been created successfully.",
-      });
-
-      onComplete(completedProfile);
-    } catch (error) {
-      console.error('Error creating family profile:', error);
-      setBridgetteExpression('thinking');
-      setBridgetteMessage("Oops! Something went wrong. Please try again. 😔");
-      
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create family profile. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    onComplete(completedProfile);
   };
 
   const canProceed = () => {
@@ -312,16 +257,14 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
       case 1:
         return familyData.parent1?.firstName && familyData.parent1?.email;
       case 2:
-        return familyData.parent2?.firstName && familyData.parent2?.email;
+        return true; // Geography step - optional
       case 3:
-        return familyData.parent1?.address && familyData.parent2?.address;
-      case 4:
         return (familyData.children?.length || 0) > 0;
-      case 5:
+      case 4:
         return familyData.custodyArrangement;
-      case 6:
+      case 5:
         return true;
-      case 7:
+      case 6:
         return true;
       default:
         return false;
@@ -498,190 +441,41 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
       case 2:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-800">Parent 2 Information</h3>
+            <h3 className="text-xl font-bold text-gray-800">Your Location</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="p2-firstName">First Name *</Label>
-                <Input
-                  id="p2-firstName"
-                  value={familyData.parent2?.firstName}
-                  onChange={(e) => updateParent2('firstName', e.target.value)}
-                  placeholder="Michael"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="p2-lastName">Last Name *</Label>
-                <Input
-                  id="p2-lastName"
-                  value={familyData.parent2?.lastName}
-                  onChange={(e) => updateParent2('lastName', e.target.value)}
-                  placeholder="Johnson"
-                  className="mt-1"
-                />
-              </div>
-            </div>
+            <Card className="border-2 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <Home className="w-8 h-8 text-blue-600" />
+                  <div>
+                    <h4 className="font-medium text-gray-800">Your Address</h4>
+                    <p className="text-sm text-gray-600">
+                      {familyData.parent1?.address && `${familyData.parent1.address}, `}
+                      {familyData.parent1?.city}, {familyData.parent1?.state} {familyData.parent1?.zipCode}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Timezone: {familyData.parent1?.timezone}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="p2-email">Email *</Label>
-                <Input
-                  id="p2-email"
-                  type="email"
-                  value={familyData.parent2?.email}
-                  onChange={(e) => updateParent2('email', e.target.value)}
-                  placeholder="michael@email.com"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="p2-phone">Phone</Label>
-                <Input
-                  id="p2-phone"
-                  type="tel"
-                  value={familyData.parent2?.phone}
-                  onChange={(e) => updateParent2('phone', e.target.value)}
-                  placeholder="(555) 987-6543"
-                  className="mt-1"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="p2-address">Street Address</Label>
-              <Input
-                id="p2-address"
-                value={familyData.parent2?.address}
-                onChange={(e) => updateParent2('address', e.target.value)}
-                placeholder="456 Oak Ave"
-                className="mt-1"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="p2-city">City</Label>
-                <Input
-                  id="p2-city"
-                  value={familyData.parent2?.city}
-                  onChange={(e) => updateParent2('city', e.target.value)}
-                  placeholder="Portland"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="p2-state">State</Label>
-                <Input
-                  id="p2-state"
-                  value={familyData.parent2?.state}
-                  onChange={(e) => updateParent2('state', e.target.value)}
-                  placeholder="OR"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="p2-zip">ZIP Code</Label>
-                <Input
-                  id="p2-zip"
-                  value={familyData.parent2?.zipCode}
-                  onChange={(e) => updateParent2('zipCode', e.target.value)}
-                  placeholder="97201"
-                  className="mt-1"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="p2-timezone">Time Zone</Label>
-              <Select value={familyData.parent2?.timezone} onValueChange={(value) => updateParent2('timezone', value)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EST">Eastern Time (EST)</SelectItem>
-                  <SelectItem value="CST">Central Time (CST)</SelectItem>
-                  <SelectItem value="MST">Mountain Time (MST)</SelectItem>
-                  <SelectItem value="PST">Pacific Time (PST)</SelectItem>
-                  <SelectItem value="AKST">Alaska Time (AKST)</SelectItem>
-                  <SelectItem value="HST">Hawaii Time (HST)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Card className="border-2 border-green-200 bg-green-50">
+              <CardContent className="p-4">
+                <div className="flex items-start space-x-3">
+                  <Users className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-green-800">About Your Co-Parent</h4>
+                    <p className="text-sm text-green-700">
+                      Your co-parent will create their own account and link to your family using the Family Code we'll generate for you. They'll add their own location information when they join.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         );
 
       case 3:
-        const distance = calculateDistance();
-        const differentTimezones = familyData.parent1?.timezone !== familyData.parent2?.timezone;
-        
-        return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-800">Geographical Information</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-2 border-blue-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-3">
-                    <Home className="w-8 h-8 text-blue-600" />
-                    <div>
-                      <h4 className="font-medium text-gray-800">Parent 1</h4>
-                      <p className="text-sm text-gray-600">{familyData.parent1?.city}, {familyData.parent1?.state}</p>
-                      <p className="text-xs text-gray-500">{familyData.parent1?.timezone}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-2 border-green-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-3">
-                    <Home className="w-8 h-8 text-green-600" />
-                    <div>
-                      <h4 className="font-medium text-gray-800">Parent 2</h4>
-                      <p className="text-sm text-gray-600">{familyData.parent2?.city}, {familyData.parent2?.state}</p>
-                      <p className="text-xs text-gray-500">{familyData.parent2?.timezone}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {distance > 0 && (
-              <Card className="border-2 border-yellow-200 bg-yellow-50">
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-3">
-                    <MapPin className="w-5 h-5 text-yellow-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-yellow-800">Distance Between Homes</h4>
-                      <p className="text-sm text-yellow-700">
-                        Approximately {distance} miles apart. I'll help you coordinate schedules across this distance!
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {differentTimezones && (
-              <Card className="border-2 border-orange-200 bg-orange-50">
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-3">
-                    <Clock className="w-5 h-5 text-orange-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-orange-800">Different Time Zones Detected</h4>
-                      <p className="text-sm text-orange-700">
-                        I'll automatically adjust all times and schedules for each parent's time zone!
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        );
-
-      case 4:
         return (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-800">Your Children</h3>
@@ -812,7 +606,7 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
           </div>
         );
 
-      case 5:
+      case 4:
         return (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-800">Custody Arrangement</h3>
@@ -866,7 +660,7 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
           </div>
         );
 
-      case 6:
+      case 5:
         return (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-800">Special Accommodations</h3>
@@ -910,7 +704,7 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
           </div>
         );
 
-      case 7:
+      case 6:
         return (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-gray-800">Review Your Information</h3>

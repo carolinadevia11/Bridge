@@ -6,20 +6,24 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import AnimatedBridgette from './AnimatedBridgette';
-import { familyAPI } from '@/lib/api';
+import { familyAPI, childrenAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { Child } from '@/types/family';
 
 interface FamilyCodeSetupProps {
   mode: 'create' | 'join';
   onSuccess: (familyData: any) => void;
   familyName?: string;
   parent1Name?: string;
+  parent2Name?: string;
+  custodyArrangement?: string;
+  children?: Child[];
 }
 
-const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, familyName, parent1Name }) => {
+const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, familyName, parent1Name, parent2Name: initialParent2Name, custodyArrangement, children }) => {
   const { toast } = useToast();
   const [familyCode, setFamilyCode] = useState('');
-  const [parent2Name, setParent2Name] = useState('');
+  const [parent2Name, setParent2Name] = useState(initialParent2Name || '');
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
@@ -37,11 +41,59 @@ const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, fami
 
     setIsSubmitting(true);
     try {
-      const response = await familyAPI.createFamily({
+      console.log('Creating family with:', { familyName, parent1Name, custodyArrangement, children });
+      
+      // Check if user already has a family
+      let response;
+      try {
+        response = await familyAPI.getFamily();
+        console.log('User already has a family, using existing:', response);
+        
+        // If family already exists, use that and just show the code
+        if (response && response.familyCode) {
+          setGeneratedCode(response.familyCode);
+          setFamilyResponse(response);
+          setIsSubmitting(false);
+          toast({
+            title: "Family Already Exists",
+            description: "Using your existing family profile",
+          });
+          return; // Exit early, don't create new family
+        }
+      } catch (familyCheckError) {
+        console.log('No existing family, creating new one');
+      }
+      
+      // Create the family
+      response = await familyAPI.createFamily({
         familyName,
         parent1_name: parent1Name,
-        custodyArrangement: '50-50'
+        custodyArrangement: custodyArrangement || '50-50'
       });
+
+      console.log('Family created successfully:', response);
+
+      // Add all children to the family
+      if (children && children.length > 0) {
+        console.log('Adding children:', children);
+        const childPromises = children.map(child => {
+          const childData = {
+            name: `${child.firstName} ${child.lastName}`,
+            dateOfBirth: child.dateOfBirth instanceof Date 
+              ? child.dateOfBirth.toISOString().split('T')[0]
+              : child.dateOfBirth,
+            grade: child.grade || '',
+            school: child.school || '',
+            allergies: child.allergies?.join(', ') || '',
+            medications: child.medicalConditions?.join(', ') || '',
+            notes: child.specialNeeds?.join(', ') || '',
+          };
+          console.log('Adding child:', childData);
+          return childrenAPI.addChild(childData);
+        });
+        await Promise.all(childPromises);
+        console.log('All children added successfully');
+      }
 
       setGeneratedCode(response.familyCode);
       setFamilyResponse(response);
@@ -51,9 +103,19 @@ const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, fami
       });
     } catch (error) {
       console.error('Error creating family:', error);
+      let errorMessage = "Failed to create family profile";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorMessage = JSON.stringify(error);
+      }
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create family profile",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

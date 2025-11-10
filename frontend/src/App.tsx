@@ -10,6 +10,8 @@ import FeatureDetail from "./pages/FeatureDetail";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminFamilyDetail from "./pages/AdminFamilyDetail";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +91,26 @@ const App = () => {
               }
             />
             <Route path="/features/:slug" element={<FeatureDetail onGetStarted={handleGetStarted} />} />
+            <Route
+              path="/admin"
+              element={
+                isAuthenticated ? (
+                  <AdminDashboard />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/admin/families/:familyId"
+              element={
+                isAuthenticated ? (
+                  <AdminFamilyDetail />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

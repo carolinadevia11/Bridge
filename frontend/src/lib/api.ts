@@ -117,15 +117,17 @@ export const familyAPI = {
 
 // Children API
 export const childrenAPI = {
+  getChildren: async () => {
+    return fetchWithAuth('/api/v1/children');
+  },
+
   addChild: async (childData: {
-    firstName: string;
-    lastName?: string;
+    name: string;
     dateOfBirth: string;
-    gender?: string;
-    school?: string;
     grade?: string;
-    allergies?: string[];
-    medications?: string[];
+    school?: string;
+    allergies?: string;
+    medications?: string;
     notes?: string;
   }) => {
     return fetchWithAuth('/api/v1/children', {
@@ -135,14 +137,12 @@ export const childrenAPI = {
   },
 
   updateChild: async (childId: string, updates: {
-    firstName?: string;
-    lastName?: string;
+    name?: string;
     dateOfBirth?: string;
-    gender?: string;
     school?: string;
     grade?: string;
-    allergies?: string[];
-    medications?: string[];
+    allergies?: string;
+    medications?: string;
     notes?: string;
   }) => {
     return fetchWithAuth(`/api/v1/children/${childId}`, {
@@ -155,6 +155,25 @@ export const childrenAPI = {
     return fetchWithAuth(`/api/v1/children/${childId}`, {
       method: 'DELETE',
     });
+  },
+};
+
+// Admin API
+export const adminAPI = {
+  getAllFamilies: async () => {
+    return fetchWithAuth('/api/v1/admin/families');
+  },
+
+  getFamilyDetails: async (familyId: string) => {
+    return fetchWithAuth(`/api/v1/admin/families/${familyId}`);
+  },
+
+  getStats: async () => {
+    return fetchWithAuth('/api/v1/admin/stats');
+  },
+
+  getAllUsers: async () => {
+    return fetchWithAuth('/api/v1/admin/users');
   },
 };
 

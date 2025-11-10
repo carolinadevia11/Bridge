@@ -108,21 +108,21 @@ const AccountSetup: React.FC<AccountSetupProps> = ({ onComplete }) => {
         // Auto-login after signup
         await authAPI.login(formData.email, formData.password);
 
-        setBridgetteExpression('celebrating');
-        setBridgetteMessage("🎉 Welcome to Bridge! Your account is all set up and ready to go!");
+      setBridgetteExpression('celebrating');
+      setBridgetteMessage("🎉 Welcome to Bridge! Your account is all set up and ready to go!");
         
         toast({
           title: "Success!",
           description: "Your account has been created and you're logged in!",
         });
 
-        setTimeout(() => {
+      setTimeout(() => {
           onComplete({
             firstName: formData.firstName,
             lastName: formData.lastName,
             email: formData.email
           });
-        }, 2000);
+      }, 2000);
       } catch (error) {
         console.error('Error creating account:', error);
         toast({

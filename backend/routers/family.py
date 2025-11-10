@@ -3,7 +3,7 @@ from typing import List
 import uuid
 import random
 import string
-from datetime import datetime
+from datetime import datetime, date
 import base64
 import re
 
@@ -89,32 +89,72 @@ async def get_family(current_user: User = Depends(get_current_user)):
     
     raise HTTPException(status_code=404, detail="Family profile not found")
 
-@router.post("/api/v1/children", response_model=Child)
-async def add_child(child_data: ChildCreate, current_user: User = Depends(get_current_user)):
-    """Add a new child to the family."""
-    # Find the user's family
+@router.get("/api/v1/children", response_model=List[Child])
+async def get_children(current_user: User = Depends(get_current_user)):
+    """Get all children for the current user's family."""
     user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
     
     if not user_family:
         raise HTTPException(status_code=404, detail="Family profile not found")
     
-    child_id = str(uuid.uuid4())
-    child = Child(
-        id=child_id,
-        name=child_data.name,
-        dateOfBirth=child_data.dateOfBirth,
-        grade=child_data.grade,
-        school=child_data.school,
-        allergies=child_data.allergies,
-        medications=child_data.medications,
-        notes=child_data.notes
-    )
-    
-    db.families.update_one(
-        {"_id": user_family["_id"]},
-        {"$push": {"children": child.model_dump()}}
-    )
-    return child
+    children = user_family.get("children", [])
+    print(f"DEBUG: Found family for {current_user.email}")
+    print(f"DEBUG: Family has {len(children)} children")
+    print(f"DEBUG: Children data: {children}")
+    return children
+
+@router.post("/api/v1/children", response_model=Child)
+async def add_child(child_data: ChildCreate, current_user: User = Depends(get_current_user)):
+    """Add a new child to the family."""
+    try:
+        print(f"DEBUG: Received child data: {child_data}")
+        
+        # Find the user's family
+        user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
+        
+        if not user_family:
+            raise HTTPException(status_code=404, detail="Family profile not found")
+        
+        child_id = str(uuid.uuid4())
+        
+        # Create child document for MongoDB (convert date to string)
+        child_doc = {
+            "id": child_id,
+            "name": child_data.name,
+            "dateOfBirth": child_data.dateOfBirth.isoformat() if isinstance(child_data.dateOfBirth, date) else str(child_data.dateOfBirth),
+            "grade": child_data.grade or "",
+            "school": child_data.school or "",
+            "allergies": child_data.allergies or "",
+            "medications": child_data.medications or "",
+            "notes": child_data.notes or ""
+        }
+        
+        print(f"DEBUG: Saving child to MongoDB: {child_doc}")
+        
+        db.families.update_one(
+            {"_id": user_family["_id"]},
+            {"$push": {"children": child_doc}}
+        )
+        
+        # Return Child model for response
+        child = Child(
+            id=child_id,
+            name=child_data.name,
+            dateOfBirth=child_data.dateOfBirth,
+            grade=child_data.grade,
+            school=child_data.school,
+            allergies=child_data.allergies,
+            medications=child_data.medications,
+            notes=child_data.notes
+        )
+        
+        print(f"DEBUG: Successfully added child to family")
+        return child
+    except Exception as e:
+        print(f"ERROR adding child: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error adding child: {str(e)}")
 
 @router.put("/api/v1/children/{child_id}", response_model=Child)
 async def update_child(child_id: str, child_data: ChildUpdate, current_user: User = Depends(get_current_user)):
@@ -276,3 +316,15 @@ async def get_contract(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="No custody agreement found")
     
     return custody_agreement
+
+@router.delete("/api/v1/family")
+async def delete_family(current_user: User = Depends(get_current_user)):
+    """Delete the current user's family profile (for testing purposes)."""
+    user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
+    
+    if not user_family:
+        raise HTTPException(status_code=404, detail="Family profile not found")
+    
+    db.families.delete_one({"_id": user_family["_id"]})
+    
+    return {"message": "Family profile deleted successfully"}

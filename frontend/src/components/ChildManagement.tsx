@@ -63,14 +63,13 @@ const ChildManagement: React.FC<ChildManagementProps> = ({
       if (editingChild) {
         // Update existing child
         await childrenAPI.updateChild(editingChild.id, {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          name: `${formData.firstName} ${formData.lastName || ''}`.trim(),
           dateOfBirth: birthDate.toISOString().split('T')[0],
-          gender: formData.gender,
-          school: formData.school,
-          grade: formData.grade,
-          allergies: formData.allergies,
-          notes: formData.notes,
+          school: formData.school || '',
+          grade: formData.grade || '',
+          allergies: Array.isArray(formData.allergies) ? formData.allergies.join(', ') : (formData.allergies || ''),
+          medications: Array.isArray(formData.medicalConditions) ? formData.medicalConditions.join(', ') : (formData.medicalConditions || ''),
+          notes: formData.notes || '',
         });
 
         onUpdateChild(editingChild.id, {
@@ -86,14 +85,13 @@ const ChildManagement: React.FC<ChildManagementProps> = ({
       } else {
         // Add new child
         const response = await childrenAPI.addChild({
-          firstName: formData.firstName,
-          lastName: formData.lastName || '',
+          name: `${formData.firstName} ${formData.lastName || ''}`.trim(),
           dateOfBirth: birthDate.toISOString().split('T')[0],
-          gender: formData.gender,
-          school: formData.school,
-          grade: formData.grade,
-          allergies: formData.allergies,
-          notes: formData.notes,
+          school: formData.school || '',
+          grade: formData.grade || '',
+          allergies: Array.isArray(formData.allergies) ? formData.allergies.join(', ') : (formData.allergies || ''),
+          medications: Array.isArray(formData.medicalConditions) ? formData.medicalConditions.join(', ') : (formData.medicalConditions || ''),
+          notes: formData.notes || '',
         });
 
         const newChild: Child = {
@@ -189,12 +187,35 @@ const ChildManagement: React.FC<ChildManagementProps> = ({
                 </div>
               </div>
 
-              {child.school && (
-                <div className="mb-3">
-                  <p className="text-sm text-gray-600">
-                    <strong>School:</strong> {child.school}
-                    {child.grade && ` (Grade ${child.grade})`}
+              {/* Date of Birth */}
+              {child.dateOfBirth && (
+                <div className="mb-3 pb-3 border-b border-gray-200">
+                  <p className="text-xs text-gray-500">Date of Birth</p>
+                  <p className="text-sm font-medium text-gray-700">
+                    {new Date(child.dateOfBirth).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
                   </p>
+                </div>
+              )}
+
+              {/* School & Grade */}
+              {(child.school || child.grade) && (
+                <div className="mb-3">
+                  {child.school && (
+                    <div className="mb-1">
+                      <p className="text-xs text-gray-500">School</p>
+                      <p className="text-sm font-medium text-gray-700">{child.school}</p>
+                    </div>
+                  )}
+                  {child.grade && (
+                    <div>
+                      <p className="text-xs text-gray-500">Grade</p>
+                      <p className="text-sm font-medium text-gray-700">{child.grade}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -234,6 +255,14 @@ const ChildManagement: React.FC<ChildManagementProps> = ({
                       </Badge>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Additional Notes */}
+              {child.notes && (
+                <div className="mb-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs font-medium text-gray-700 mb-1">Additional Notes:</p>
+                  <p className="text-sm text-gray-600 italic">{child.notes}</p>
                 </div>
               )}
 

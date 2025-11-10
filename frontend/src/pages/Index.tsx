@@ -14,13 +14,15 @@ import EducationalResources from '@/components/EducationalResources';
 import OnboardingFlow from '@/components/OnboardingFlow';
 import OnboardingExplanation from '@/components/OnboardingExplanation';
 import AccountSetup from '@/components/AccountSetup';
+import BridgettePersonalization from '@/components/BridgettePersonalization';
+import FamilyChoice from '@/components/FamilyChoice';
 import FamilyCodeSetup from '@/components/FamilyCodeSetup';
 import ContractUpload from '@/components/ContractUpload';
 import UserSettings from '@/components/UserSettings';
 import FamilyOnboarding from '@/components/FamilyOnboarding';
 import ChildManagement from '@/components/ChildManagement';
 import { FamilyProfile, Child } from '@/types/family';
-import { authAPI, familyAPI } from '@/lib/api';
+import { authAPI, familyAPI, childrenAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface IndexProps {
@@ -37,6 +39,8 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showOnboardingExplanation, setShowOnboardingExplanation] = useState(startOnboarding);
   const [showAccountSetup, setShowAccountSetup] = useState(false);
+  const [showBridgettePersonalization, setShowBridgettePersonalization] = useState(false);
+  const [showFamilyChoice, setShowFamilyChoice] = useState(false);
   const [showFamilyCodeSetup, setShowFamilyCodeSetup] = useState(false);
   const [showContractUpload, setShowContractUpload] = useState(false);
   const [showFamilyOnboarding, setShowFamilyOnboarding] = useState(false);
@@ -54,6 +58,56 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     familyCode?: string;
   } | null>(null);
   const [currentUser, setCurrentUser] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+
+  // Save onboarding state to localStorage whenever it changes
+  useEffect(() => {
+    const onboardingState = {
+      showOnboardingExplanation,
+      showAccountSetup,
+      showBridgettePersonalization,
+      showFamilyChoice,
+      showFamilyOnboarding,
+      showFamilyCodeSetup,
+      showContractUpload,
+      familyCodeMode,
+      tempFamilyData,
+      currentUser,
+    };
+    
+    // Only save if user is in onboarding flow (at least one onboarding screen is active)
+    const isInOnboarding = showOnboardingExplanation || showAccountSetup || showBridgettePersonalization || 
+                           showFamilyChoice || showFamilyOnboarding || showFamilyCodeSetup || showContractUpload;
+    
+    if (isInOnboarding) {
+      localStorage.setItem('onboardingState', JSON.stringify(onboardingState));
+    } else {
+      localStorage.removeItem('onboardingState');
+    }
+  }, [showOnboardingExplanation, showAccountSetup, showBridgettePersonalization, showFamilyChoice, 
+      showFamilyOnboarding, showFamilyCodeSetup, showContractUpload, familyCodeMode, tempFamilyData, currentUser]);
+
+  // Restore onboarding state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('onboardingState');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        setShowOnboardingExplanation(state.showOnboardingExplanation || false);
+        setShowAccountSetup(state.showAccountSetup || false);
+        setShowBridgettePersonalization(state.showBridgettePersonalization || false);
+        setShowFamilyChoice(state.showFamilyChoice || false);
+        setShowFamilyOnboarding(state.showFamilyOnboarding || false);
+        setShowFamilyCodeSetup(state.showFamilyCodeSetup || false);
+        setShowContractUpload(state.showContractUpload || false);
+        setFamilyCodeMode(state.familyCodeMode || 'create');
+        setTempFamilyData(state.tempFamilyData || null);
+        setCurrentUser(state.currentUser || null);
+      } catch (error) {
+        console.error('Error restoring onboarding state:', error);
+        localStorage.removeItem('onboardingState');
+      }
+    }
+  }, []);
 
   // Fetch current user and family profile on mount
   useEffect(() => {
@@ -73,9 +127,47 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
           try {
             const family = await familyAPI.getFamily();
             if (family) {
+              // Fetch children separately to ensure we have the latest data
+              let children = [];
+              try {
+                const childrenData = await childrenAPI.getChildren();
+                console.log('Fetched children from backend:', childrenData);
+                
+                // Convert backend children to frontend format
+                children = childrenData.map((child: any) => {
+                  const [firstName, ...lastNameParts] = (child.name || '').split(' ');
+                  const lastName = lastNameParts.join(' ');
+                  const convertedChild = {
+                    id: child.id,
+                    firstName: firstName || '',
+                    lastName: lastName || '',
+                    dateOfBirth: new Date(child.dateOfBirth),
+                    age: Math.floor((Date.now() - new Date(child.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
+                    gender: child.gender,
+                    school: child.school,
+                    grade: child.grade,
+                    allergies: child.allergies ? child.allergies.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+                    medicalConditions: child.medications ? child.medications.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+                    specialNeeds: child.notes ? [child.notes] : [],
+                    notes: child.notes,
+                  };
+                  console.log('Converted child:', convertedChild);
+                  return convertedChild;
+                });
+                
+                console.log('Total children converted:', children.length);
+              } catch (childError) {
+                console.error('Error fetching children:', childError);
+              }
+
               // Convert backend family data to FamilyProfile format
-              // This is a simplified version - you may need to adjust based on your backend structure
-              setFamilyProfile(family as FamilyProfile);
+              setFamilyProfile({
+                ...family,
+                children: children,
+              } as FamilyProfile);
+              
+              // If family profile exists, clear onboarding state
+              localStorage.removeItem('onboardingState');
             }
           } catch (error) {
             // Family profile doesn't exist yet - that's okay
@@ -128,63 +220,124 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     return (
       <AccountSetup 
         onComplete={(userData) => {
-          // Store user data for Family Code setup
+          // Store user data and show Bridgette personalization
+          setCurrentUser(userData);
           setTempFamilyData({
             firstName: userData.firstName,
             lastName: userData.lastName,
             email: userData.email,
-            familyName: `${userData.lastName} Family`, // Auto-generate family name
-            parent1_name: `${userData.firstName} ${userData.lastName}`
           });
           setShowAccountSetup(false);
+          setShowBridgettePersonalization(true);
+        }} 
+      />
+    );
+  }
+
+  // Show Bridgette Personalization (Step 4 in PRD flow)
+  if (showBridgettePersonalization) {
+    return (
+      <BridgettePersonalization
+        onComplete={(preferences) => {
+          // Store preferences (could save to backend here)
+          console.log('User preferences:', preferences);
+          setShowBridgettePersonalization(false);
+          setShowFamilyChoice(true);
+        }}
+      />
+    );
+  }
+
+  // Show family choice (create new or link existing)
+  if (showFamilyChoice) {
+    return (
+      <FamilyChoice
+        onCreateNew={() => {
+          setFamilyCodeMode('create');
+          setShowFamilyChoice(false);
+          setShowFamilyOnboarding(true);
+        }}
+        onLinkExisting={() => {
+          setFamilyCodeMode('join');
+          setShowFamilyChoice(false);
+          setShowFamilyCodeSetup(true);
+        }}
+      />
+    );
+  }
+
+  // Show family onboarding to collect full family profile
+  if (showFamilyOnboarding && !familyProfile) {
+    return (
+      <FamilyOnboarding 
+        initialUserData={currentUser || undefined}
+        onComplete={(profile) => {
+          // Store the complete profile for later use
+          setFamilyProfile(profile);
+          setShowFamilyOnboarding(false);
+          // After family profile, generate family code
+          setTempFamilyData({
+            ...tempFamilyData,
+            familyName: profile.familyName,
+            parent1_name: `${currentUser?.firstName} ${currentUser?.lastName}`,
+            custodyArrangement: profile.custodyArrangement,
+            children: profile.children,
+          });
           setShowFamilyCodeSetup(true);
         }} 
       />
     );
   }
 
-  // Show Family Code Setup
+  // Show Family Code Setup after family profile is complete (or for Parent 2 to link)
   if (showFamilyCodeSetup) {
     return (
       <FamilyCodeSetup
         mode={familyCodeMode}
         onSuccess={(familyData) => {
-          setTempFamilyData(prev => ({ ...prev, ...familyData }));
-          setShowFamilyCodeSetup(false);
-          setShowContractUpload(true);
+          if (familyCodeMode === 'join') {
+            // Parent 2 successfully linked - go straight to dashboard
+            setFamilyProfile(familyData as FamilyProfile);
+            setShowFamilyCodeSetup(false);
+            toast({
+              title: "Welcome to Bridge!",
+              description: "You've been successfully linked to your family!",
+            });
+          } else {
+            // Parent 1 - Family code generated! Now show contract upload
+            setShowFamilyCodeSetup(false);
+            setShowContractUpload(true);
+          }
         }}
         familyName={tempFamilyData?.familyName}
         parent1Name={tempFamilyData?.parent1_name}
+        parent2Name={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined}
+        custodyArrangement={tempFamilyData?.custodyArrangement}
+        children={tempFamilyData?.children}
       />
     );
   }
 
-  // Show Contract Upload
+  // Show Contract Upload (optional)
   if (showContractUpload) {
     return (
       <ContractUpload
         onComplete={(parsedData) => {
           setShowContractUpload(false);
-          setShowFamilyOnboarding(true);
+          // Go to dashboard
+          toast({
+            title: "Welcome to Bridge!",
+            description: "Your family profile is complete!",
+          });
         }}
         onSkip={() => {
           setShowContractUpload(false);
-          setShowFamilyOnboarding(true);
+          // Go to dashboard
+          toast({
+            title: "Welcome to Bridge!",
+            description: "You can upload your custody agreement later from Documents.",
+          });
         }}
-      />
-    );
-  }
-
-  // Show family onboarding first if no profile exists
-  if (!familyProfile && showFamilyOnboarding) {
-    return (
-      <FamilyOnboarding 
-        onComplete={(profile) => {
-          setFamilyProfile(profile);
-          setShowFamilyOnboarding(false);
-          setShowOnboarding(true);
-          setIsFirstTime(true);
-        }} 
       />
     );
   }
@@ -406,19 +559,19 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                 </Button>
               )}
               {!currentUser && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
+              <Button 
+                variant="outline" 
+                size="sm"
                   onClick={() => {
                     setShowOnboardingExplanation(true);
                     setShowAccountSetup(false);
                     setShowFamilyOnboarding(false);
                   }}
-                  className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Create Account
-                </Button>
+                className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create Account
+              </Button>
               )}
               <Button 
                 variant="outline" 
