@@ -23,6 +23,7 @@ const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, fami
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [familyResponse, setFamilyResponse] = useState<any>(null);
 
   const handleCreateFamily = async () => {
     if (!familyName || !parent1Name) {
@@ -43,15 +44,11 @@ const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, fami
       });
 
       setGeneratedCode(response.familyCode);
+      setFamilyResponse(response);
       toast({
         title: "Success!",
         description: "Family profile created with Family Code",
       });
-
-      // Auto-proceed after showing code
-      setTimeout(() => {
-        onSuccess(response);
-      }, 3000);
     } catch (error) {
       console.error('Error creating family:', error);
       toast({
@@ -211,9 +208,13 @@ const FamilyCodeSetup: React.FC<FamilyCodeSetupProps> = ({ mode, onSuccess, fami
                 </AlertDescription>
               </Alert>
 
-              <p className="text-center text-sm text-gray-600">
-                Continuing in 3 seconds...
-              </p>
+              <Button
+                onClick={() => familyResponse && onSuccess(familyResponse)}
+                disabled={!familyResponse}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+              >
+                Continue
+              </Button>
             </CardContent>
           </Card>
         )}

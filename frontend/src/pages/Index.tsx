@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,9 +26,12 @@ import { useToast } from '@/hooks/use-toast';
 interface IndexProps {
   onLogout: () => void;
   startOnboarding?: boolean;
+  startInSettings?: boolean;
 }
 
-const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false }) => {
+const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startInSettings = false }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -36,7 +40,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false }) => {
   const [showFamilyCodeSetup, setShowFamilyCodeSetup] = useState(false);
   const [showContractUpload, setShowContractUpload] = useState(false);
   const [showFamilyOnboarding, setShowFamilyOnboarding] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(startInSettings);
   const [showChildManagement, setShowChildManagement] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
   const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
@@ -85,6 +89,22 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false }) => {
 
     fetchUserData();
   }, []);
+
+  useEffect(() => {
+    if (startInSettings) {
+      setShowSettings(true);
+    }
+  }, [startInSettings]);
+
+  useEffect(() => {
+    if (showSettings) {
+      if (location.pathname !== '/settings') {
+        navigate('/settings', { replace: true });
+      }
+    } else if (location.pathname === '/settings') {
+      navigate('/', { replace: true });
+    }
+  }, [showSettings, location.pathname, navigate]);
 
   // Show onboarding explanation (check this first as it's a direct user action)
   if (showOnboardingExplanation) {

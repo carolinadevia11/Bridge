@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import LandingPage from "./pages/LandingPage";
+import FeatureDetail from "./pages/FeatureDetail";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -77,6 +78,17 @@ const App = () => {
                 )
               }
             />
+            <Route
+              path="/settings"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startInSettings />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route path="/features/:slug" element={<FeatureDetail onGetStarted={handleGetStarted} />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

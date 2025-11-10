@@ -414,10 +414,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div>
               <h4 className="font-bold mb-4">Features</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>Smart Calendar</li>
-                <li>Secure Messaging</li>
-                <li>Expense Tracking</li>
-                <li>Document Management</li>
+                <li>
+                  <Link to="/features/smart-calendar" className="hover:text-white transition-colors">
+                    Smart Calendar
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/features/secure-messaging" className="hover:text-white transition-colors">
+                    Secure Messaging
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/features/expense-tracking" className="hover:text-white transition-colors">
+                    Expense Tracking
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/features/document-management" className="hover:text-white transition-colors">
+                    Document Management
+                  </Link>
+                </li>
               </ul>
             </div>
             <div>

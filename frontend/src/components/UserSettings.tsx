@@ -627,17 +627,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                             ))}
                           </div>
                         </div>
-
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                          <div>
-                            <Label className="font-medium">Compact Mode</Label>
-                            <p className="text-sm text-gray-600">Show more content in less space</p>
-                          </div>
-                          <Switch
-                            checked={settings.appearance.compactMode}
-                            onCheckedChange={(checked) => updateSetting('appearance', 'compactMode', checked)}
-                          />
-                        </div>
                       </div>
                     </div>
                   </TabsContent>
