@@ -107,3 +107,32 @@ class ChangeRequestCreate(BaseModel):
 
 class ChangeRequestUpdate(BaseModel):
     status: str  # approved or rejected
+
+# Messaging Models
+class Message(BaseModel):
+    id: Optional[str] = None
+    conversation_id: str
+    sender_email: str
+    content: str
+    tone: str  # 'matter-of-fact', 'friendly', 'neutral-legal'
+    timestamp: Optional[datetime] = None
+    status: str = 'sent'  # sent, delivered, read
+
+class MessageCreate(BaseModel):
+    conversation_id: str
+    content: str
+    tone: str = 'friendly'
+
+class Conversation(BaseModel):
+    id: Optional[str] = None
+    family_id: str
+    subject: str
+    category: str  # 'custody', 'medical', 'school', 'activities', 'financial', 'general', 'urgent'
+    participants: List[str]  # List of user emails
+    created_at: Optional[datetime] = None
+    last_message_at: Optional[datetime] = None
+    is_archived: bool = False
+
+class ConversationCreate(BaseModel):
+    subject: str
+    category: str = 'general'

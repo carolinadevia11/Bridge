@@ -56,8 +56,11 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     familyName?: string;
     parent1_name?: string;
     familyCode?: string;
+    custodyArrangement?: string;
+    children?: Child[];
   } | null>(null);
   const [currentUser, setCurrentUser] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const unreadMessagesCount = 0;
 
   // Save onboarding state to localStorage whenever it changes
   useEffect(() => {
@@ -128,16 +131,16 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
             const family = await familyAPI.getFamily();
             if (family) {
               // Fetch children separately to ensure we have the latest data
-              let children = [];
+              let children: Child[] = [];
               try {
                 const childrenData = await childrenAPI.getChildren();
                 console.log('Fetched children from backend:', childrenData);
-                
+
                 // Convert backend children to frontend format
-                children = childrenData.map((child: any) => {
+                children = childrenData.map((child) => {
                   const [firstName, ...lastNameParts] = (child.name || '').split(' ');
                   const lastName = lastNameParts.join(' ');
-                  const convertedChild = {
+                  const convertedChild: Child = {
                     id: child.id,
                     firstName: firstName || '',
                     lastName: lastName || '',
@@ -154,7 +157,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   console.log('Converted child:', convertedChild);
                   return convertedChild;
                 });
-                
+
                 console.log('Total children converted:', children.length);
               } catch (childError) {
                 console.error('Error fetching children:', childError);
@@ -772,7 +775,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   icon={MessageSquare}
                   color="yellow"
                   onClick={() => setActiveTab('messages')}
-                  badge="2"
+                  badge={unreadMessagesCount > 0 ? String(unreadMessagesCount) : undefined}
                 />
                 <QuickActionCard
                   title="Review Expense"

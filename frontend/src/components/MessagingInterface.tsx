@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Smile, FileText, AlertCircle, CheckCircle, Search, Filter, Plus, MessageSquare, Calendar, User, Clock, Star, Archive, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,13 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import BridgetteAvatar from './BridgetteAvatar';
+import { messagingAPI, authAPI } from '@/lib/api';
 
 interface Message {
   id: string;
-  sender: 'mom' | 'dad';
+  conversationId: string;
+  senderEmail: string;
   content: string;
-  timestamp: Date;
+  timestamp: string;
   tone: 'matter-of-fact' | 'friendly' | 'neutral-legal';
   status: 'sent' | 'delivered' | 'read';
 }
@@ -24,115 +27,27 @@ interface Conversation {
   id: string;
   subject: string;
   category: 'custody' | 'medical' | 'school' | 'activities' | 'financial' | 'general' | 'urgent';
-  participants: ('mom' | 'dad')[];
-  messages: Message[];
-  lastMessage: Date;
+  participants: string[];
+  messageCount: number;
+  lastMessageAt: string | null;
   unreadCount: number;
   isStarred: boolean;
   isArchived: boolean;
 }
 
-const MessagingInterface: React.FC = () => {
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: '1',
-      subject: 'Saturday Pickup Confirmation',
-      category: 'custody',
-      participants: ['mom', 'dad'],
-      lastMessage: new Date(Date.now() - 1800000),
-      unreadCount: 0,
-      isStarred: false,
-      isArchived: false,
-      messages: [
-        {
-          id: '1',
-          sender: 'mom',
-          content: "Hi! Just confirming pickup time for Saturday is still 10am?",
-          timestamp: new Date(Date.now() - 3600000),
-          tone: 'friendly',
-          status: 'read'
-        },
-        {
-          id: '2',
-          sender: 'dad',
-          content: "Yes, 10am works perfectly. I'll have Emma ready with her overnight bag.",
-          timestamp: new Date(Date.now() - 1800000),
-          tone: 'matter-of-fact',
-          status: 'read'
-        }
-      ]
-    },
-    {
-      id: '2',
-      subject: 'Emma\'s Soccer Tournament Schedule',
-      category: 'activities',
-      participants: ['mom', 'dad'],
-      lastMessage: new Date(Date.now() - 86400000),
-      unreadCount: 2,
-      isStarred: true,
-      isArchived: false,
-      messages: [
-        {
-          id: '3',
-          sender: 'dad',
-          content: "The soccer tournament schedule is out. Emma has games on March 15th and 22nd. Can you take the 15th?",
-          timestamp: new Date(Date.now() - 172800000),
-          tone: 'matter-of-fact',
-          status: 'read'
-        },
-        {
-          id: '4',
-          sender: 'mom',
-          content: "Yes, I can definitely take March 15th. What time should I have her there?",
-          timestamp: new Date(Date.now() - 86400000),
-          tone: 'friendly',
-          status: 'delivered'
-        }
-      ]
-    },
-    {
-      id: '3',
-      subject: 'Medical Insurance Update',
-      category: 'medical',
-      participants: ['mom', 'dad'],
-      lastMessage: new Date(Date.now() - 259200000),
-      unreadCount: 0,
-      isStarred: false,
-      isArchived: false,
-      messages: [
-        {
-          id: '5',
-          sender: 'mom',
-          content: "I received the new insurance cards. Emma's pediatrician visit is covered under the new plan.",
-          timestamp: new Date(Date.now() - 259200000),
-          tone: 'neutral-legal',
-          status: 'read'
-        }
-      ]
-    },
-    {
-      id: '4',
-      subject: 'School Parent-Teacher Conference',
-      category: 'school',
-      participants: ['mom', 'dad'],
-      lastMessage: new Date(Date.now() - 432000000),
-      unreadCount: 1,
-      isStarred: false,
-      isArchived: false,
-      messages: [
-        {
-          id: '6',
-          sender: 'dad',
-          content: "Emma's teacher wants to schedule a conference. Are you available next Tuesday at 3pm?",
-          timestamp: new Date(Date.now() - 432000000),
-          tone: 'matter-of-fact',
-          status: 'delivered'
-        }
-      ]
-    }
-  ]);
+interface CurrentUser {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role?: string;
+}
 
-  const [activeConversation, setActiveConversation] = useState<string | null>('1');
+const MessagingInterface: React.FC = () => {
+  const { toast } = useToast();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedTone, setSelectedTone] = useState<'matter-of-fact' | 'friendly' | 'neutral-legal'>('friendly');
   const [searchTerm, setSearchTerm] = useState('');
@@ -140,6 +55,12 @@ const MessagingInterface: React.FC = () => {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [newConversationSubject, setNewConversationSubject] = useState('');
   const [newConversationCategory, setNewConversationCategory] = useState<'custody' | 'medical' | 'school' | 'activities' | 'financial' | 'general' | 'urgent'>('general');
+  const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const conversationPollingRef = useRef<number | null>(null);
+  const messagePollingRef = useRef<number | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const categoryColors = {
     custody: 'bg-blue-100 text-blue-800',
@@ -173,9 +94,141 @@ const MessagingInterface: React.FC = () => {
     'neutral-legal': 'bg-gray-100 text-gray-800'
   };
 
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const user = await authAPI.getCurrentUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch user information",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const fetchConversations = useCallback(async (options: { silent?: boolean } = {}) => {
+    const { silent = false } = options;
+    try {
+      if (!silent) {
+        setLoading(true);
+      }
+      const data = await messagingAPI.getConversations();
+      setConversations(data);
+      
+      // Select first conversation if none is selected
+      if (data.length > 0 && !activeConversation) {
+        setActiveConversation(data[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      if (!silent) {
+        toast({
+          title: "Error",
+          description: "Failed to load conversations",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, [activeConversation, toast]);
+
+  const fetchMessages = useCallback(async (conversationId: string, options: { silent?: boolean } = {}) => {
+    const { silent = false } = options;
+    try {
+      const data = await messagingAPI.getMessages(conversationId);
+      setMessages((prev) => {
+        const optimistic = prev.filter((msg) => msg.id.startsWith('temp-'));
+        const merged = [...data];
+        optimistic.forEach((msg) => {
+          if (!merged.some((existing) => existing.id === msg.id)) {
+            merged.push(msg);
+          }
+        });
+        return merged;
+      });
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      if (!silent) {
+        toast({
+          title: "Error",
+          description: "Failed to load messages",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [toast]);
+
+  // Fetch current user and conversations on mount + start conversations polling
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchConversations();
+
+    if (conversationPollingRef.current) {
+      window.clearInterval(conversationPollingRef.current);
+    }
+
+    conversationPollingRef.current = window.setInterval(() => {
+      fetchConversations({ silent: true });
+    }, 3000);
+
+    return () => {
+      if (conversationPollingRef.current) {
+        window.clearInterval(conversationPollingRef.current);
+      }
+    };
+  }, [fetchCurrentUser, fetchConversations]);
+
+  // Fetch messages when active conversation changes
+  useEffect(() => {
+    if (activeConversation) {
+      fetchMessages(activeConversation);
+    }
+  }, [activeConversation, fetchMessages]);
+
+  // Auto-scroll when messages update
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      window.requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth',
+        });
+      });
+    }
+  }, [messages, activeConversation]);
+
+  // Poll messages for the active conversation
+  useEffect(() => {
+    if (messagePollingRef.current) {
+      window.clearInterval(messagePollingRef.current);
+    }
+
+    if (!activeConversation) {
+      return;
+    }
+
+    const pollMessages = () => {
+      fetchMessages(activeConversation, { silent: true });
+    };
+
+    pollMessages();
+    messagePollingRef.current = window.setInterval(pollMessages, 2000);
+
+    return () => {
+      if (messagePollingRef.current) {
+        window.clearInterval(messagePollingRef.current);
+      }
+    };
+  }, [activeConversation, fetchMessages]);
+
   const filteredConversations = conversations.filter(conv => {
-    const matchesSearch = conv.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         conv.messages.some(msg => msg.content.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch = conv.subject.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterCategory === 'all' || conv.category === filterCategory;
     const notArchived = !conv.isArchived;
     return matchesSearch && matchesFilter && notArchived;
@@ -183,61 +236,101 @@ const MessagingInterface: React.FC = () => {
 
   const activeConv = conversations.find(conv => conv.id === activeConversation);
 
-  const sendMessage = () => {
-    if (!newMessage.trim() || !activeConversation) return;
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !activeConversation || !currentUser || isSending) return;
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender: 'mom', // In real app, this would be the current user
-      content: newMessage,
-      timestamp: new Date(),
-      tone: selectedTone,
-      status: 'sent'
-    };
+    try {
+      setIsSending(true);
+      const tempId = `temp-${Date.now()}`;
+      const createdAt = new Date().toISOString();
+      const optimisticMessage: Message = {
+        id: tempId,
+        conversationId: activeConversation,
+        senderEmail: currentUser.email,
+        content: newMessage,
+        tone: selectedTone,
+        timestamp: createdAt,
+        status: 'sent',
+      };
 
-    setConversations(prev => prev.map(conv => {
-      if (conv.id === activeConversation) {
-        return {
-          ...conv,
-          messages: [...conv.messages, message],
-          lastMessage: new Date()
-        };
-      }
-      return conv;
-    }));
+      setMessages((prev) => [...prev, optimisticMessage]);
+      setNewMessage('');
 
-    setNewMessage('');
+      const response = await messagingAPI.sendMessage({
+        conversation_id: activeConversation,
+        content: newMessage,
+        tone: selectedTone,
+      });
+      
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? response : msg))
+      );
+      fetchConversations({ silent: true });
+      fetchMessages(activeConversation, { silent: true });
+      
+      toast({
+        title: "Message sent",
+        description: "Your message has been delivered",
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Remove optimistic message if send failed
+      setMessages((prev) => prev.filter((msg) => !msg.id.startsWith('temp-')));
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const createNewConversation = () => {
+  const createNewConversation = async () => {
     if (!newConversationSubject.trim()) return;
 
-    const newConv: Conversation = {
-      id: Date.now().toString(),
-      subject: newConversationSubject,
-      category: newConversationCategory,
-      participants: ['mom', 'dad'],
-      messages: [],
-      lastMessage: new Date(),
-      unreadCount: 0,
-      isStarred: false,
-      isArchived: false
-    };
+    try {
+      const newConv = await messagingAPI.createConversation({
+        subject: newConversationSubject,
+        category: newConversationCategory,
+      });
 
-    setConversations(prev => [newConv, ...prev]);
-    setActiveConversation(newConv.id);
-    setNewConversationSubject('');
-    setNewConversationCategory('general');
-    setShowNewConversation(false);
+      setConversations(prev => [newConv, ...prev]);
+      setActiveConversation(newConv.id);
+      setNewConversationSubject('');
+      setNewConversationCategory('general');
+      setShowNewConversation(false);
+      
+      toast({
+        title: "Conversation created",
+        description: "Start messaging with your co-parent",
+      });
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      const description = error instanceof Error ? error.message : "Failed to create conversation";
+      toast({
+        title: "Error",
+        description,
+        variant: "destructive",
+      });
+    }
   };
 
-  const toggleStar = (convId: string) => {
-    setConversations(prev => prev.map(conv => 
-      conv.id === convId ? { ...conv, isStarred: !conv.isStarred } : conv
-    ));
+  const toggleStar = async (convId: string) => {
+    try {
+      await messagingAPI.toggleStar(convId);
+      setConversations(prev => prev.map(conv => 
+        conv.id === convId ? { ...conv, isStarred: !conv.isStarred } : conv
+      ));
+    } catch (error) {
+      console.error('Error toggling star:', error);
+    }
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    
+    const date = new Date(dateStr);
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
     
@@ -263,10 +356,10 @@ const MessagingInterface: React.FC = () => {
             <BridgetteAvatar size="md" expression="encouraging" />
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-800">
-                Hey Sarah, I'm here to help. Ask anything!
+                Hey {currentUser?.firstName || 'there'}, I'm here to help with your conversations!
               </p>
               <p className="text-xs text-gray-600 mt-1">
-                Organize your conversations by subject and category to easily find important discussions later! 💬
+                Organize your conversations by subject and category to easily find important discussions later! All messages are encrypted and logged for legal documentation. 💬
               </p>
             </div>
           </div>
@@ -304,7 +397,12 @@ const MessagingInterface: React.FC = () => {
                     </div>
                     <div>
                       <Label htmlFor="category">Category</Label>
-                      <Select value={newConversationCategory} onValueChange={(value: any) => setNewConversationCategory(value)}>
+                      <Select
+                        value={newConversationCategory}
+                        onValueChange={(value) =>
+                          setNewConversationCategory(value as Conversation['category'])
+                        }
+                      >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
@@ -372,7 +470,6 @@ const MessagingInterface: React.FC = () => {
             ) : (
               filteredConversations.map((conv) => {
                 const CategoryIcon = categoryIcons[conv.category];
-                const lastMsg = conv.messages[conv.messages.length - 1];
                 
                 return (
                   <div
@@ -414,15 +511,9 @@ const MessagingInterface: React.FC = () => {
                       {conv.category}
                     </Badge>
                     
-                    {lastMsg && (
-                      <p className="text-xs text-gray-600 truncate mb-1">
-                        {lastMsg.content}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{formatTime(conv.lastMessage)}</span>
-                      <span>{conv.messages.length} messages</span>
+                    <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
+                      <span>{formatTime(conv.lastMessageAt)}</span>
+                      <span>{conv.messageCount} messages</span>
                     </div>
                   </div>
                 );
@@ -445,7 +536,7 @@ const MessagingInterface: React.FC = () => {
                         {activeConv.category}
                       </Badge>
                       <span className="text-sm text-gray-600">
-                        {activeConv.messages.length} messages
+                        {activeConv.messageCount} messages
                       </span>
                     </div>
                   </div>
@@ -465,38 +556,58 @@ const MessagingInterface: React.FC = () => {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {activeConv.messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'mom' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                      message.sender === 'mom' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs px-2 py-1 rounded ${toneColors[message.tone]}`}>
-                          {message.tone}
-                        </span>
-                        <span className="text-xs opacity-70 ml-2">
-                          {formatTime(message.timestamp)}
-                        </span>
-                      </div>
-                      <p className="text-sm">{message.content}</p>
-                      <div className="flex items-center justify-end mt-2">
-                        {message.status === 'read' && <CheckCircle className="w-3 h-3 opacity-70" />}
-                      </div>
-                    </div>
+              <div
+                className="flex-1 p-4 overflow-y-auto space-y-4"
+                ref={messagesContainerRef}
+              >
+                {messages.length === 0 ? (
+                  <div className="text-center text-gray-500 mt-8">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>No messages yet. Start the conversation!</p>
                   </div>
-                ))}
+                ) : (
+                  messages.map((message) => {
+                    const isCurrentUser = currentUser && message.senderEmail === currentUser.email;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                          isCurrentUser
+                            ? 'bg-blue-500 text-white' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              isCurrentUser ? 'bg-blue-600 text-white' : toneColors[message.tone]
+                            }`}>
+                              {message.tone}
+                            </span>
+                            <span className="text-xs opacity-70 ml-2">
+                              {formatTime(message.timestamp)}
+                            </span>
+                          </div>
+                          <p className="text-sm">{message.content}</p>
+                          {isCurrentUser && (
+                            <div className="flex items-center justify-end mt-2">
+                              {message.status === 'read' && <CheckCircle className="w-3 h-3 opacity-70" />}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* Message Input */}
               <div className="p-4 border-t border-gray-200">
                 <div className="mb-3">
-                  <Select value={selectedTone} onValueChange={(value: any) => setSelectedTone(value)}>
+                  <Select
+                    value={selectedTone}
+                    onValueChange={(value) => setSelectedTone(value as Message['tone'])}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -540,7 +651,7 @@ const MessagingInterface: React.FC = () => {
                     className="flex-1 resize-none"
                     rows={2}
                   />
-                  <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                  <Button onClick={sendMessage} disabled={!newMessage.trim() || isSending}>
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>

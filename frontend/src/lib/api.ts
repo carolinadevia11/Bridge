@@ -219,3 +219,47 @@ export const calendarAPI = {
     return fetchWithAuth('/api/v1/calendar/change-requests');
   },
 };
+
+// Messaging API
+export const messagingAPI = {
+  getConversations: async () => {
+    return fetchWithAuth('/api/v1/messaging/conversations');
+  },
+
+  createConversation: async (conversationData: {
+    subject: string;
+    category: string;
+  }) => {
+    return fetchWithAuth('/api/v1/messaging/conversations', {
+      method: 'POST',
+      body: JSON.stringify(conversationData),
+    });
+  },
+
+  getMessages: async (conversationId: string) => {
+    return fetchWithAuth(`/api/v1/messaging/conversations/${conversationId}/messages`);
+  },
+
+  sendMessage: async (messageData: {
+    conversation_id: string;
+    content: string;
+    tone: string;
+  }) => {
+    return fetchWithAuth('/api/v1/messaging/messages', {
+      method: 'POST',
+      body: JSON.stringify(messageData),
+    });
+  },
+
+  toggleStar: async (conversationId: string) => {
+    return fetchWithAuth(`/api/v1/messaging/conversations/${conversationId}/star`, {
+      method: 'PATCH',
+    });
+  },
+
+  archiveConversation: async (conversationId: string) => {
+    return fetchWithAuth(`/api/v1/messaging/conversations/${conversationId}/archive`, {
+      method: 'PATCH',
+    });
+  },
+};
