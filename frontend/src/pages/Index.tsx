@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby, LogOut } from 'lucide-react';
+import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProgressBar from '@/components/ProgressBar';
 import QuickActionCard from '@/components/QuickActionCard';
@@ -22,7 +22,7 @@ import UserSettings from '@/components/UserSettings';
 import FamilyOnboarding from '@/components/FamilyOnboarding';
 import ChildManagement from '@/components/ChildManagement';
 import { FamilyProfile, Child } from '@/types/family';
-import { authAPI, familyAPI, childrenAPI } from '@/lib/api';
+import { authAPI, familyAPI, childrenAPI, adminAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface IndexProps {
@@ -30,6 +30,21 @@ interface IndexProps {
   startOnboarding?: boolean;
   startInSettings?: boolean;
 }
+
+type CurrentUser = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role?: string;
+};
+
+type AdminStats = {
+  totalFamilies: number;
+  linkedFamilies: number;
+  unlinkedFamilies: number;
+  totalUsers: number;
+  totalChildren: number;
+};
 
 const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startInSettings = false }) => {
   const navigate = useNavigate();
@@ -59,8 +74,50 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     custodyArrangement?: string;
     children?: Child[];
   } | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const unreadMessagesCount = 0;
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  const [adminPendingFamilies, setAdminPendingFamilies] = useState<any[]>([]);
+  const [adminRecentFamilies, setAdminRecentFamilies] = useState<any[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+
+  const pendingFamilyCount = adminStats?.unlinkedFamilies ?? adminPendingFamilies.length;
+
+  const handleCopyFamilyCode = async () => {
+    if (!familyProfile?.familyCode) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(familyProfile.familyCode);
+      toast({
+        title: "Family code copied",
+        description: "Share this code with your co-parent to link accounts.",
+      });
+    } catch (error) {
+      console.error('Failed to copy family code:', error);
+      toast({
+        title: "Unable to copy",
+        description: "Please copy the family code manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (value?: string) => {
+    if (!value) {
+      return '—';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   // Save onboarding state to localStorage whenever it changes
   useEffect(() => {
@@ -112,19 +169,74 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     }
   }, []);
 
-  // Fetch current user and family profile on mount
+  // Fetch current user and family/admin profile on mount
   useEffect(() => {
+    const loadAdminOverview = async () => {
+      setAdminLoading(true);
+      setAdminError(null);
+      try {
+        const [statsData, familiesData] = await Promise.all([
+          adminAPI.getStats(),
+          adminAPI.getAllFamilies(),
+        ]);
+
+        setAdminStats(statsData);
+
+        if (Array.isArray(familiesData)) {
+          const pendingFamilies = familiesData.filter((family: any) => !family.isLinked);
+          setAdminPendingFamilies(pendingFamilies.slice(0, 4));
+
+          const recent = [...familiesData]
+            .sort((a: any, b: any) => {
+              const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return bDate - aDate;
+            })
+            .slice(0, 5);
+          setAdminRecentFamilies(recent);
+        } else {
+          setAdminPendingFamilies([]);
+          setAdminRecentFamilies([]);
+        }
+      } catch (error) {
+        console.error('Error fetching admin overview:', error);
+        const message = error instanceof Error ? error.message : 'Failed to load admin overview.';
+        setAdminError(message);
+        toast({
+          title: "Admin data unavailable",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setAdminLoading(false);
+      }
+    };
+
     const fetchUserData = async () => {
       try {
         const token = localStorage.getItem('authToken');
         if (token) {
-          // Fetch user profile
           const userProfile = await authAPI.getCurrentUser();
-          setCurrentUser({
+          const normalizedUser: CurrentUser = {
             firstName: userProfile.firstName,
             lastName: userProfile.lastName,
-            email: userProfile.email
-          });
+            email: userProfile.email,
+            role: userProfile.role,
+          };
+
+          setCurrentUser(normalizedUser);
+
+          if (userProfile.role === 'admin') {
+            setFamilyProfile(null);
+            await loadAdminOverview();
+            return;
+          }
+
+          // Clear any stale admin data when switching from admin to standard view
+          setAdminStats(null);
+          setAdminPendingFamilies([]);
+          setAdminRecentFamilies([]);
+          setAdminError(null);
 
           // Fetch family profile if exists
           try {
@@ -183,7 +295,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
     };
 
     fetchUserData();
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (startInSettings) {
@@ -396,6 +508,316 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
             }}
           />
         </div>
+      </div>
+    );
+  }
+
+  if (currentUser?.role === 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <header className="bg-white shadow-sm border-b border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Bridge Admin Home</h1>
+                <p className="text-sm text-slate-600">
+                  Welcome back, {currentUser.firstName}! You have {pendingFamilyCount}{' '}
+                  {pendingFamilyCount === 1 ? 'family' : 'families'} awaiting linkage.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/admin')}
+                  className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                >
+                  <Scale className="w-4 h-4 mr-2" />
+                  Open Admin Console
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSettings(true)}
+                  className="border-gray-300 text-slate-700 hover:bg-gray-100"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onLogout();
+                    toast({
+                      title: "Logged out",
+                      description: "You have been logged out successfully.",
+                    });
+                  }}
+                  className="border-red-300 text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {adminLoading ? (
+            <div className="min-h-[240px] flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+            </div>
+          ) : (
+            <>
+              {adminError && (
+                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {adminError}
+                </div>
+              )}
+
+              <Card className="mb-6 bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400 text-white shadow-lg border-none">
+                <CardContent className="p-6 md:p-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                        Good morning, {currentUser.firstName}! ⚖️
+                      </h2>
+                      <p className="text-sm md:text-base text-white/90">
+                        A quick snapshot of Bridge activity: {adminStats?.totalFamilies ?? '—'} total families,
+                        {` `}
+                        {adminStats?.totalUsers ?? '—'} caregivers, and {pendingFamilyCount}{' '}
+                        pending {pendingFamilyCount === 1 ? 'invitation' : 'invitations'} to review.
+                      </p>
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-sm rounded-xl px-6 py-4">
+                      <p className="text-xs uppercase tracking-wide text-white/80">At a glance</p>
+                      <div className="mt-2 flex items-center gap-6">
+                        <div>
+                          <p className="text-2xl font-bold">{adminStats?.totalFamilies ?? '—'}</p>
+                          <p className="text-xs text-white/80">Families</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{adminStats?.totalChildren ?? '—'}</p>
+                          <p className="text-xs text-white/80">Children</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{pendingFamilyCount}</p>
+                          <p className="text-xs text-white/80">Pending links</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {adminStats && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                  <Card className="border-t-4 border-indigo-300 bg-white shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500">Total Families</p>
+                          <p className="text-2xl font-semibold text-slate-900">{adminStats.totalFamilies}</p>
+                        </div>
+                        <Users className="w-8 h-8 text-indigo-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-t-4 border-green-300 bg-white shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500">Linked Families</p>
+                          <p className="text-2xl font-semibold text-slate-900 text-green-600">{adminStats.linkedFamilies}</p>
+                        </div>
+                        <UserCheck className="w-8 h-8 text-green-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-t-4 border-orange-300 bg-white shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500">Awaiting Link</p>
+                          <p className="text-2xl font-semibold text-slate-900 text-orange-600">{adminStats.unlinkedFamilies}</p>
+                        </div>
+                        <UserX className="w-8 h-8 text-orange-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-t-4 border-purple-300 bg-white shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500">Total Users</p>
+                          <p className="text-2xl font-semibold text-slate-900 text-purple-600">{adminStats.totalUsers}</p>
+                        </div>
+                        <BarChart3 className="w-8 h-8 text-purple-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-t-4 border-pink-300 bg-white shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500">Children</p>
+                          <p className="text-2xl font-semibold text-slate-900 text-pink-600">{adminStats.totalChildren}</p>
+                        </div>
+                        <Baby className="w-8 h-8 text-pink-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-2 border border-indigo-100 bg-white/80 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+                      <AlertTriangle className="w-5 h-5 text-orange-500" />
+                      Pending family links
+                    </CardTitle>
+                    <CardDescription className="text-slate-500">
+                      Families waiting for Parent 2 to finalize their connection
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {adminPendingFamilies.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                        No pending family invitations right now.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {adminPendingFamilies.map((family) => {
+                          const familyId = family.id || family._id || family.familyCode;
+                          return (
+                            <div
+                              key={familyId || `${family.parent1?.email}-${family.familyCode}`}
+                              className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-lg border border-slate-200 bg-white/90 p-4 shadow-sm"
+                            >
+                              <div>
+                                <p className="font-semibold text-slate-900">{family.familyName || 'Untitled Family'}</p>
+                                <p className="text-sm text-slate-600">
+                                  Primary contact: {family.parent1?.firstName} {family.parent1?.lastName} • {family.parent1?.email}
+                                </p>
+                                <p className="text-xs text-slate-500 mt-1">
+                                  Family code: {family.familyCode || '—'} • Created {formatDate(family.createdAt)}
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => familyId && navigate(`/admin/families/${familyId}`)}
+                                disabled={!familyId}
+                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60"
+                              >
+                                Review
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-indigo-100 bg-white/90 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+                      <Users className="w-5 h-5 text-indigo-500" />
+                      Recent family activity
+                    </CardTitle>
+                    <CardDescription className="text-slate-500">
+                      Latest families created or linked in Bridge
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {adminRecentFamilies.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                        No recent family activity to show yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {adminRecentFamilies.slice(0, 5).map((family) => {
+                          const familyId = family.id || family._id || family.familyCode;
+                          const isLinked = Boolean(family.isLinked);
+                          return (
+                            <div
+                              key={`${familyId || family.familyName}-recent`}
+                              className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="font-semibold text-slate-900">{family.familyName || 'Untitled Family'}</p>
+                                  <p className="text-xs text-slate-500">
+                                    Created {formatDate(family.createdAt)}
+                                    {family.linkedAt ? ` • Linked ${formatDate(family.linkedAt)}` : ''}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                    isLinked ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                                  }`}
+                                >
+                                  {isLinked ? 'Linked' : 'Awaiting link'}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between">
+                                <p className="text-xs text-slate-500">
+                                  Parent 1: {family.parent1?.firstName} {family.parent1?.lastName}
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => familyId && navigate(`/admin/families/${familyId}`)}
+                                  disabled={!familyId}
+                                  className="text-indigo-600 hover:bg-indigo-50 disabled:opacity-60"
+                                >
+                                  View
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-xl font-semibold text-slate-800 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <QuickActionCard
+                    title="Manage Families"
+                    description="Open the full admin console"
+                    icon={Users}
+                    color="blue"
+                    onClick={() => navigate('/admin')}
+                  />
+                  <QuickActionCard
+                    title="Pending Invitations"
+                    description={pendingFamilyCount > 0 ? `${pendingFamilyCount} awaiting review` : 'All caught up'}
+                    icon={AlertTriangle}
+                    color="red"
+                    onClick={() => navigate('/admin')}
+                    urgent={pendingFamilyCount > 0}
+                    badge={pendingFamilyCount > 0 ? String(pendingFamilyCount) : undefined}
+                  />
+                  <QuickActionCard
+                    title="View User Directory"
+                    description="See all caregivers across Bridge"
+                    icon={BarChart3}
+                    color="green"
+                    onClick={() => navigate('/admin')}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </main>
       </div>
     );
   }
@@ -624,6 +1046,24 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                        ' Custom custody'}
                       {familyProfile.differentTimezones && ' • Different time zones'}
                     </p>
+                    {familyProfile.familyCode && (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                          Family Code
+                        </span>
+                        <span className="font-mono text-sm bg-white px-3 py-1 rounded-md border border-green-200 text-green-700 shadow-sm">
+                          {familyProfile.familyCode}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleCopyFamilyCode}
+                          className="border-green-200 text-green-700 hover:bg-green-100"
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex space-x-2">

@@ -17,6 +17,7 @@ export interface Child {
 export interface FamilyProfile {
   id: string;
   familyName: string;
+  familyCode?: string;
   
   // Parent 1 (Mom)
   parent1: {
