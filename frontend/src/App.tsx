@@ -72,11 +72,71 @@ const App = () => {
               path="/"
               element={
                 isAuthenticated ? (
-                  <Index onLogout={handleLogout} startOnboarding={false} />
+                  <Navigate to="/dashboard" replace />
                 ) : showOnboarding ? (
                   <Index onLogout={handleLogout} startOnboarding={true} />
                 ) : (
                   <LandingPage onGetStarted={handleGetStarted} />
+                )
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/calendar"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/expenses"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/resources"
+              element={
+                isAuthenticated ? (
+                  <Index onLogout={handleLogout} startOnboarding={false} />
+                ) : (
+                  <Navigate to="/login" replace />
                 )
               }
             />

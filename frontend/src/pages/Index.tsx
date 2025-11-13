@@ -71,7 +71,31 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Determine active tab from URL pathname
+  const getTabFromPath = (pathname: string): string => {
+    if (pathname.startsWith('/calendar')) return 'calendar';
+    if (pathname.startsWith('/messages')) return 'messages';
+    if (pathname.startsWith('/expenses')) return 'expenses';
+    if (pathname.startsWith('/documents')) return 'documents';
+    if (pathname.startsWith('/resources')) return 'resources';
+    if (pathname.startsWith('/dashboard')) return 'dashboard';
+    return 'dashboard'; // default
+  };
+  
+  const [activeTab, setActiveTab] = useState(getTabFromPath(location.pathname));
+  
+  // Sync activeTab with URL pathname when location changes
+  useEffect(() => {
+    const tab = getTabFromPath(location.pathname);
+    setActiveTab(tab);
+  }, [location.pathname]);
+  
+  // Helper function to change tab and update URL
+  const changeTab = (tab: string) => {
+    setActiveTab(tab);
+    navigate(`/${tab}`, { replace: true });
+  };
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showOnboardingExplanation, setShowOnboardingExplanation] = useState(startOnboarding);
   const [showAccountSetup, setShowAccountSetup] = useState(false);
@@ -1099,7 +1123,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
           </Card>
         )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-6 bg-white rounded-xl shadow-sm p-1 border-2 border-gray-200">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">
               <Home className="w-4 h-4" />
@@ -1164,7 +1188,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                       </ul>
                     </div>
                     <Button 
-                      onClick={() => setActiveTab('expenses')}
+                      onClick={() => changeTab('expenses')}
                       className="bg-bridge-red hover:bg-red-600 text-white font-medium"
                     >
                       Review Now
@@ -1228,14 +1252,14 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   description="Add to shared calendar"
                   icon={Calendar}
                   color="green"
-                  onClick={() => setActiveTab('calendar')}
+                  onClick={() => changeTab('calendar')}
                 />
                 <QuickActionCard
                   title="Send Message"
                   description="Communicate securely"
                   icon={MessageSquare}
                   color="yellow"
-                  onClick={() => setActiveTab('messages')}
+                  onClick={() => changeTab('messages')}
                   badge={unreadMessagesCount > 0 ? String(unreadMessagesCount) : undefined}
                 />
                 <QuickActionCard
@@ -1243,7 +1267,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   description="Pending approval needed"
                   icon={DollarSign}
                   color="red"
-                  onClick={() => setActiveTab('expenses')}
+                  onClick={() => changeTab('expenses')}
                   urgent={true}
                   badge="URGENT"
                 />
@@ -1252,15 +1276,15 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   description="Access agreements"
                   icon={FileText}
                   color="blue"
-                  onClick={() => setActiveTab('documents')}
+                  onClick={() => changeTab('documents')}
                 />
               </div>
             </div>
 
             <RecentActivity
-              onNavigateToExpenses={() => setActiveTab('expenses')}
-              onNavigateToCalendar={() => setActiveTab('calendar')}
-              onNavigateToMessages={() => setActiveTab('messages')}
+              onNavigateToExpenses={() => changeTab('expenses')}
+              onNavigateToCalendar={() => changeTab('calendar')}
+              onNavigateToMessages={() => changeTab('messages')}
             />
 
             <Card className="border-2 border-bridge-blue bg-blue-50">
@@ -1274,7 +1298,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => setActiveTab('resources')}
+                    onClick={() => changeTab('resources')}
                     className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
                   >
                     Learn More
