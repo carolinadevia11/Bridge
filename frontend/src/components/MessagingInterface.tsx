@@ -174,7 +174,7 @@ const MessagingInterface: React.FC = () => {
 
     conversationPollingRef.current = window.setInterval(() => {
       fetchConversations({ silent: true });
-    }, 3000);
+    }, 1500);
 
     return () => {
       if (conversationPollingRef.current) {
@@ -218,7 +218,7 @@ const MessagingInterface: React.FC = () => {
     };
 
     pollMessages();
-    messagePollingRef.current = window.setInterval(pollMessages, 2000);
+    messagePollingRef.current = window.setInterval(pollMessages, 750);
 
     return () => {
       if (messagePollingRef.current) {

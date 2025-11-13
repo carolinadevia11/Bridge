@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Bell, Shield, Palette, Globe, Heart, Save, Edit, Camera, MessageSquare, BookOpen, Languages, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,24 +10,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import AnimatedBridgette from './AnimatedBridgette';
+import { FamilyProfile } from '@/types/family';
+import { authAPI } from '@/lib/api';
+
+type UserProfileInfo = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  timezone?: string;
+  bio?: string;
+};
 
 interface UserSettingsProps {
   onBack: () => void;
+  initialProfile?: UserProfileInfo | null;
+  familyProfile?: FamilyProfile | null;
 }
 
-const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
+const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, familyProfile }) => {
   const [bridgetteExpression, setBridgetteExpression] = useState<'thinking' | 'encouraging' | 'celebrating' | 'balanced' | 'mediating'>('encouraging');
   const [bridgetteMessage, setBridgetteMessage] = useState("Let's make sure your Bridge experience is perfect for you! I'm here to help with any changes you'd like to make! ⚙️");
   const [hasChanges, setHasChanges] = useState(false);
 
   const [settings, setSettings] = useState({
     profile: {
-      firstName: 'Sarah',
-      lastName: 'Johnson',
-      email: 'sarah.johnson@email.com',
-      phone: '(555) 123-4567',
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
       timezone: 'EST',
-      bio: 'Mom of two amazing kids. Focused on creating a positive co-parenting environment.'
+      bio: ''
     },
     notifications: {
       email: true,
@@ -76,6 +89,98 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
       language: 'english'
     }
   });
+
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const applyProfileToSettings = (profile: UserProfileInfo) => {
+    setSettings(prev => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        firstName: profile.firstName ?? prev.profile.firstName,
+        lastName: profile.lastName ?? prev.profile.lastName,
+        email: profile.email ?? prev.profile.email,
+        phone: profile.phone ?? prev.profile.phone,
+        timezone: profile.timezone ?? prev.profile.timezone,
+        bio: profile.bio ?? prev.profile.bio,
+      },
+    }));
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateProfile = async () => {
+      try {
+        if (initialProfile) {
+          applyProfileToSettings(initialProfile);
+          setLoadError(null);
+          return;
+        }
+
+        setLoadingProfile(true);
+        const user = await authAPI.getCurrentUser();
+        if (!isMounted) {
+          return;
+        }
+
+        applyProfileToSettings({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+        });
+        setLoadError(null);
+      } catch (error) {
+        console.error('Error loading user profile for settings:', error);
+        if (isMounted) {
+          setLoadError('Unable to load profile information.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingProfile(false);
+        }
+      }
+    };
+
+    hydrateProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialProfile]);
+
+  const activeEmail = (initialProfile?.email || settings.profile.email || '').toLowerCase();
+
+  useEffect(() => {
+    if (!familyProfile || !activeEmail) {
+      return;
+    }
+
+    const parents = [
+      familyProfile.parent1,
+      familyProfile.parent2,
+    ].filter(Boolean) as Array<FamilyProfile['parent1']>;
+
+    const matchedParent = parents.find((parent) => parent.email?.toLowerCase() === activeEmail);
+
+    if (matchedParent) {
+      applyProfileToSettings({
+        firstName: matchedParent.firstName,
+        lastName: matchedParent.lastName,
+        email: matchedParent.email,
+        phone: (matchedParent as any).phone || settings.profile.phone,
+        timezone: (matchedParent as any).timezone || settings.profile.timezone,
+        bio: (matchedParent as any).bio || settings.profile.bio,
+      });
+    }
+  }, [familyProfile, activeEmail]);
+
+  const profileInitials = (
+    `${settings.profile.firstName?.charAt(0) ?? ''}${settings.profile.lastName?.charAt(0) ?? ''}`.trim() ||
+    settings.profile.email?.charAt(0)?.toUpperCase() ||
+    '?'
+  );
 
   const updateSetting = (category: string, field: string, value: any) => {
     setSettings(prev => ({
@@ -185,7 +290,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                     Back
                   </Button>
                 </CardTitle>
-                <p className="text-gray-600">Customize your Bridge experience</p>
+                <p className="text-gray-600">
+                  {loadingProfile ? 'Loading your information...' : 'Customize your Bridge experience'}
+                </p>
+                {loadError && (
+                  <p className="text-sm text-red-500 mt-1">{loadError}</p>
+                )}
               </CardHeader>
               
               <CardContent>
@@ -211,10 +321,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                       <Heart className="w-4 h-4" />
                       <span className="hidden sm:inline">Bridgette</span>
                     </TabsTrigger>
-                    <TabsTrigger value="appearance" className="flex items-center space-x-1">
-                      <Palette className="w-4 h-4" />
-                      <span className="hidden sm:inline">Theme</span>
-                    </TabsTrigger>
                   </TabsList>
 
                   {/* Profile Settings */}
@@ -222,7 +328,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                     <div className="flex items-center space-x-4 mb-6">
                       <div className="relative">
                         <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                          {settings.profile.firstName[0]}{settings.profile.lastName[0]}
+                          {profileInitials}
                         </div>
                         <Button size="sm" className="absolute -bottom-2 -right-2 rounded-full w-8 h-8 p-0">
                           <Camera className="w-4 h-4" />
@@ -230,9 +336,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-gray-800">
-                          {settings.profile.firstName} {settings.profile.lastName}
+                          {[settings.profile.firstName, settings.profile.lastName].filter(Boolean).join(' ') || 'Your name'}
                         </h3>
-                        <p className="text-gray-600">{settings.profile.email}</p>
+                        <p className="text-gray-600">{settings.profile.email || 'Add your email address'}</p>
                       </div>
                     </div>
 
@@ -320,7 +426,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="english">English</SelectItem>
-                          <SelectItem value="spanish">Español (Spanish)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -593,43 +698,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
                     </div>
                   </TabsContent>
 
-                  {/* Appearance Settings */}
-                  <TabsContent value="appearance" className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4">Appearance</h3>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <Label>Theme</Label>
-                          <Select value={settings.appearance.theme} onValueChange={(value) => updateSetting('appearance', 'theme', value)}>
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="light">Light</SelectItem>
-                              <SelectItem value="dark">Dark</SelectItem>
-                              <SelectItem value="auto">Auto (System)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label>Color Scheme</Label>
-                          <div className="grid grid-cols-4 gap-2 mt-2">
-                            {['blue', 'purple', 'green', 'pink'].map((color) => (
-                              <button
-                                key={color}
-                                onClick={() => updateSetting('appearance', 'colorScheme', color)}
-                                className={`h-12 rounded-lg border-2 ${
-                                  settings.appearance.colorScheme === color ? 'border-gray-800' : 'border-gray-200'
-                                } bg-gradient-to-br from-${color}-400 to-${color}-600`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
+                  
                 </Tabs>
               </CardContent>
             </Card>

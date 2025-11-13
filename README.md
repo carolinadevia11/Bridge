@@ -40,6 +40,8 @@ Create `backend/.env`:
 ```bash
 JWT_SECRET=<random-64-char-hex>
 MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/<database>?retryWrites=true&w=majority&appName=<app>&authSource=admin
+# Optional: override default 2-day sessions
+ACCESS_TOKEN_EXPIRE_MINUTES=8640
 ```
 
 Notes:

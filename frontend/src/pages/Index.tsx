@@ -46,6 +46,26 @@ type AdminStats = {
   totalChildren: number;
 };
 
+type AdminFamilyRecord = {
+  id?: string;
+  _id?: string;
+  familyName?: string;
+  familyCode?: string;
+  isLinked?: boolean;
+  createdAt?: string;
+  linkedAt?: string | null;
+  parent1?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  parent2?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  } | null;
+};
+
 const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startInSettings = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,8 +97,8 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const unreadMessagesCount = 0;
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
-  const [adminPendingFamilies, setAdminPendingFamilies] = useState<any[]>([]);
-  const [adminRecentFamilies, setAdminRecentFamilies] = useState<any[]>([]);
+  const [adminPendingFamilies, setAdminPendingFamilies] = useState<AdminFamilyRecord[]>([]);
+  const [adminRecentFamilies, setAdminRecentFamilies] = useState<AdminFamilyRecord[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
 
@@ -175,29 +195,23 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
       setAdminLoading(true);
       setAdminError(null);
       try {
-        const [statsData, familiesData] = await Promise.all([
-          adminAPI.getStats(),
-          adminAPI.getAllFamilies(),
-        ]);
+        const statsData = await adminAPI.getStats();
+        const familiesResponse = await adminAPI.getAllFamilies();
+        const familiesData: AdminFamilyRecord[] = Array.isArray(familiesResponse) ? familiesResponse : [];
 
         setAdminStats(statsData);
 
-        if (Array.isArray(familiesData)) {
-          const pendingFamilies = familiesData.filter((family: any) => !family.isLinked);
-          setAdminPendingFamilies(pendingFamilies.slice(0, 4));
+        const pendingFamilies = familiesData.filter((family) => !family.isLinked);
+        setAdminPendingFamilies(pendingFamilies.slice(0, 4));
 
-          const recent = [...familiesData]
-            .sort((a: any, b: any) => {
-              const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-              const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-              return bDate - aDate;
-            })
-            .slice(0, 5);
-          setAdminRecentFamilies(recent);
-        } else {
-          setAdminPendingFamilies([]);
-          setAdminRecentFamilies([]);
-        }
+        const recent = [...familiesData]
+          .sort((a, b) => {
+            const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bDate - aDate;
+          })
+          .slice(0, 5);
+        setAdminRecentFamilies(recent);
       } catch (error) {
         console.error('Error fetching admin overview:', error);
         const message = error instanceof Error ? error.message : 'Failed to load admin overview.';
@@ -471,7 +485,13 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
 
   // Show settings screen
   if (showSettings) {
-    return <UserSettings onBack={() => setShowSettings(false)} />;
+    return (
+      <UserSettings
+        onBack={() => setShowSettings(false)}
+        initialProfile={currentUser || undefined}
+        familyProfile={familyProfile}
+      />
+    );
   }
 
   // Show child management
